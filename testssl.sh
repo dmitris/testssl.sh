@@ -49,7 +49,7 @@ SWCONTACT="dirk aet testssl dot sh"
 CAPATH="${CAPATH:-/etc/ssl/certs/}"	# same as previous. Doing nothing yet. FC has only a CA bundle per default, ==> openssl version -d
 OSSL_VER=""				# openssl version, will be autodetermined
 NC=""					# netcat will be autodetermined
-ECHO="/bin/echo -e" 		# works under Linux, watch out under Solaris, not tested yet under cygwin 
+ECHO="/usr/bin/printf" 		# works under Linux, watch out under Solaris, not tested yet under cygwin 
 COLOR=0					# with screen, tee and friends put 1 here (i.e. no color)
 SHOW_LCIPHERS=no    		# determines whether the client side ciphers are displayed at all (makes no sense normally)
 VERBERR=${VERBERR:-1}		# 0 means to be more verbose (some like the errors to be dispayed so that one can tell better
@@ -180,6 +180,7 @@ ok(){
 			0) bold "not offered" ;;    	# 0 0
 		esac
 	fi
+	echo
 	return $2
 }
 
@@ -260,7 +261,7 @@ sed -i -e '/^<HTML/,$d' -e '/^<XML /,$d' -e '/<?XML /,$d' \
 #FIXME: it doesn't follow a 30x. At least a path should be possible to provide
 hsts() {
 	[ -s $HEADERFILE ] || http_header
-	bold " HSTS        \c"
+	bold " HSTS        "
 	grep -i '^Strict-Transport-Security' $HEADERFILE >$TMPFILE
 	if [ $? -eq 0 ]; then
 # fix Markus Manzke:
@@ -280,7 +281,8 @@ hsts() {
 
 serverbanner() {
 	[ -s $HEADERFILE ] || http_header
-	bold " Server      \c"
+	echo
+	bold "\nServer      "
 	grep -i '^Server' $HEADERFILE >$TMPFILE
 	if [ $? -eq 0 ]; then
 		#out=`cat $TMPFILE | sed -e 's/^Server: //' -e 's/^server: //' -e 's/^[[:space:]]//'`
@@ -301,7 +303,7 @@ serverbanner() {
 	if [ $? -eq 0 ]; then
 		#cat $TMPFILE | sed 's/^.*:/:/'  | sed -e :a -e '$!N;s/\n:/ \n\             +/;ta' -e 'P;D' | sed 's/://g' 
 		cat $TMPFILE | sed 's/^/ /' 
-		$ECHO
+		$ECHO ""
 	else
 		lgrey " (None)\n"
 	fi
@@ -359,7 +361,7 @@ prettyprint_local() {
 			echo $HEXC | grep -iq "$1" || continue
 		fi
 		neat_list $HEXC $ciph $kx $enc
-		$ECHO
+		echo
 	done
 	echo
 	return 0
@@ -414,10 +416,11 @@ std_cipherlists() {
 	rm $TMPFILE
 	else
 		magenta "Local problem: No $2 configured in $OPENSSL"
+		echo
 	fi
 	# we need lf in those cases:
-	[ "$LOCERR" -eq 0 ] && echo
-	[ "$VERBERR" -eq 0 ] && echo
+	[ "$LOCERR" -eq 0 ] && echo ""
+	[ "$VERBERR" -eq 0 ] && echo ""
 }
 
 # sockets inspired by http://blog.chris007.de/?p=238
@@ -444,10 +447,10 @@ show_rfc_style(){
 neat_header(){
 	$ECHO " Hexcode\c" ; c_abs 13; $ECHO "Cipher Suite Name (OpenSSL)\c"; c_abs 43; $ECHO "KeyExch.\c"; c_abs 52; $ECHO "Encryption\c"; c_abs 63; $ECHO "Bits\c"
 	[ -r $MAP_RFC_FNAME ] && c_abs 73 && $ECHO "Cipher Suite Name (RFC)\c"
-	$ECHO # in any case a LF
-	$ECHO "-----------------------------------------------------------------------\c"
-	[ -r $MAP_RFC_FNAME ] && $ECHO "---------------------------------------------\c"
-	$ECHO # in any case a LF
+	echo
+	$ECHO "%s" "--------------------------------------------------------------------------------------------------------------------"
+	# [ -r $MAP_RFC_FNAME ] && $ECHO "%s" "---------------------------------------------"
+	echo # in any case a LF
 }
 
 neat_list(){
@@ -459,6 +462,7 @@ neat_list(){
 	echo "$export" | grep -iq export && strength="$strength,export"
 	$ECHO " [$1]\c" ;  c_abs 13; $ECHO "$2\c" ; c_abs 43;  $ECHO "$kx\c" ; c_abs 54; $ECHO "$enc\c"; c_abs 63; $ECHO "$strength\c"; c_abs 73
 	[ -r $MAP_RFC_FNAME ] && show_rfc_style $HEXC
+	echo
 }
 
 
@@ -483,11 +487,11 @@ allciphers(){
 				$ECHO "  not a/v"
 			fi
 		else
-			$ECHO
+			$ECHO ""
 		fi
 		rm $TMPFILE
 	done
-	$ECHO
+	$ECHO ""
 	return 0
 }
 # test for all ciphers per protocol locally configured (w/o distinguishing whether they are good or bad
@@ -498,7 +502,7 @@ cipher_per_proto(){
 	neat_header
 	echo -e " -ssl2 SSLv2\n -ssl3 SSLv3\n -tls1 TLSv1\n -tls1_1 TLSv1.1\n -tls1_2 TLSv1.2"| while read proto prtext; do
 		locally_supported "$proto" "$prtext" || continue
-		$ECHO
+		$ECHO ""
 		$OPENSSL ciphers $proto -V 'ALL:COMPLEMENTOFALL:@STRENGTH' | while read hexcode n ciph sslvers kx auth enc mac export; do
 			$OPENSSL s_client -cipher $ciph $proto $STARTTLS -connect $NODEIP:$PORT $SNI &>$TMPFILE  </dev/null
 			ret=$?
@@ -515,12 +519,12 @@ cipher_per_proto(){
 					$ECHO "  not a/v"
 				fi
 			else
-				$ECHO
+				$ECHO ""
 			fi
 			rm $TMPFILE
 		done
 	done
-	$ECHO 
+	$ECHO ""
 	return 0
 }
 
@@ -529,6 +533,7 @@ locally_supported() {
 	$OPENSSL s_client "$1" 2>&1 | grep -q "unknown option"
 	if [ $? -eq 0 ]; then
 		magenta "Local problem: $OPENSSL doesn't support \"s_client $1\""
+		echo
 		return 7
 	else
 		return 0
@@ -555,7 +560,8 @@ testprotohelper() {
 
 runprotocols() {
 	echo
-	blue "--> Testing Protocols\n"
+	blue "\n--> Testing Protocols"
+	echo
 	# e.g. ubuntu's 12.04 openssl binary + soon others don't want sslv2 anymore: bugs.launchpad.net/ubuntu/+source/openssl/+bug/955675
 	# Sonderlocke hier #FIXME kann woanders auch auftauchen!
 	testprotohelper -ssl2 " SSLv2     " 
@@ -596,7 +602,8 @@ runprotocols() {
 
 run_std_cipherlists() {
 	echo
-	blue "--> Testing standard cipher lists\n"
+	blue "\n--> Testing standard cipher lists"
+	echo
 # see man ciphers
 	std_cipherlists NULL:eNULL                   " Null Cipher             " 1
 	std_cipherlists aNULL                        " Anonymous NULL Cipher   " 1
@@ -614,7 +621,8 @@ run_std_cipherlists() {
 
 simple_preference() {
 	echo
-	blue "--> Testing server defaults (Server Hello)\n"
+	blue "--> Testing server defaults (Server Hello)"
+	echo
 	# throwing every cipher/protocol at the server and displaying its pick
 	$OPENSSL s_client $STARTTLS -connect $NODEIP:$PORT $SNI -tlsextdebug </dev/null 2>/dev/null >$TMPFILE
 	localtime=`date "+%s"`
@@ -632,7 +640,7 @@ simple_preference() {
 			*SSLv3)		brown $TLS_PROTO_OFFERED ;;
 			*)			$ECHO "FIXME: $TLS_PROTO_OFFERED" ;;
 		esac
-
+		echo
 		$ECHO " Negotiated cipher         \c"
 		default=`grep -w "Cipher" $TMPFILE | egrep -vw "New|is" | sed -e 's/^ \+Cipher \+://' -e 's/ //g'`
 		case "$default" in
@@ -643,7 +651,7 @@ simple_preference() {
 			ECDHE*AES*)    brown "$default" ;; # it's CBC. so lucky13
 			*)			$ECHO "$default" ;;
 		esac
-
+		# echo
 		$ECHO " \n Server key size           \c"
 		keysize=`grep -w "^Server public key is" $TMPFILE | sed -e 's/^Server public key is //'`
 		if [ -z "$keysize" ]; then
@@ -656,15 +664,15 @@ simple_preference() {
 				*) $ECHO "$keysize" ;;
 			esac
 		fi
-
+		echo
 		$ECHO " TLS server extensions:    \c"
 		extensions=`grep -w "^TLS server extension" $TMPFILE | sed -e 's/^TLS server extension \"//' -e 's/\".*$/,/g'`
 		if [ -z "$extensions" ]; then
 			$ECHO "(none)"
 		else
-			$ECHO $extensions | sed 's/,$//'	# remove last comma
+			echo $extensions | sed 's/,$//'	# remove last comma
 		fi
-
+		# echo
 		$ECHO " Session Tickets RFC 5077  \c"
 		sessticket_str=`grep -w "session ticket" $TMPFILE | grep lifetime`
 		if [ -z "$sessticket_str" ]; then
@@ -674,6 +682,7 @@ simple_preference() {
 			unit=`echo $sessticket_str | grep lifetime | sed -e 's/^.*'"$lifetime"'//' -e 's/[ ()]//g'`
 			$ECHO "$lifetime $unit"
 		fi
+		echo
 		ret=0
 
 		#gmt_unix_time, removed since 1.0.1f
@@ -691,7 +700,7 @@ simple_preference() {
 		#http://www.moserware.com/2009/06/first-few-milliseconds-of-https.html
 	fi
 
-	$ECHO
+	$ECHO ""
 	rm $TMPFILE
 	return $ret
 }
@@ -699,7 +708,7 @@ simple_preference() {
 
 # http://www.heise.de/security/artikel/Forward-Secrecy-testen-und-einrichten-1932806.html
 pfs() {
-	blue "--> Testing (Perfect) Forward Secrecy  (P)FS)"
+	blue "\n--> Testing (Perfect) Forward Secrecy  (P)FS)"
 # https://community.qualys.com/blogs/securitylabs/2013/08/05/configuring-apache-nginx-and-openssl-for-forward-secrecy
 	PFSOK='EECDH+ECDSA+AESGCM EECDH+aRSA+AESGCM EECDH+ECDSA+SHA256 EECDH+aRSA+SHA256 EECDH+aRSA+RC4 EDH+aRSA EECDH RC4 !RC4-SHA !aNULL !eNULL !LOW !3DES !MD5 !EXP !PSK !SRP !DSS:@STRENGTH'
 #	PFSOK='EECDH+ECDSA+AESGCM EECDH+aRSA+AESGCM EECDH+ECDSA+SHA384 EECDH+ECDSA+SHA256 EECDH+aRSA+SHA384 EECDH'
@@ -739,14 +748,16 @@ pfs() {
 				fi
 			else
 				noone=1
-				$ECHO
+				$ECHO ""
 			fi
 		done
 		if [ "$noone" -eq 0 ] ; then
 			 $ECHO "\nPlease note: detected PFS ciphers don't necessarily mean any client/browser will use them"
+			 echo
 			 ret=0
 		else
 			 magenta "no PFS ciphers found"
+			 echo
 			 ret=1
 		fi
 	fi
@@ -757,12 +768,15 @@ pfs() {
 
 rc4() {
 	echo
+	echo
 	blue "--> Checking RC4 Ciphers"
+	echo
 	$OPENSSL ciphers -V 'RC4:@STRENGTH' >$TMPFILE 
 	[ x$SHOW_LCIPHERS = "xyes" ] && echo "local ciphers available for testing RC4:" && echo `cat $TMPFILE`
 	$OPENSSL s_client -cipher `$OPENSSL ciphers RC4` $STARTTLS -connect $NODEIP:$PORT $SNI &>/dev/null </dev/null
 	RC4=$?
 	if [ $RC4 -eq 0 ]; then
+		# echo
 		lred "\nRC4 seems generally available. Now testing specific ciphers...\n"
 		bad=1
 		neat_header
@@ -783,7 +797,7 @@ rc4() {
 				fi
 			else
 				bad=1
-				$ECHO
+				$ECHO ""
 			fi
 		done
 		# https://en.wikipedia.org/wiki/Transport_Layer_Security#RC4_attacks
@@ -793,7 +807,7 @@ rc4() {
 		lgreen "\nNo RC4 ciphers detected (OK)"
 		bad=0
 	fi
-	$ECHO
+	$ECHO ""
 
 	rm $TMPFILE
 	return $bad
@@ -945,9 +959,11 @@ ccs_injection(){
 
 	if [ "$reply_sanitized" == "0a" ] || [ "$lines" -gt 1 ] ; then
 		green "NOT vulnerable (ok)"
+		echo
 		ret=0
 	else
 		red "VULNERABLE"
+		echo
 		ret=1
 	fi
 	rm $TMPFILE
@@ -955,6 +971,8 @@ ccs_injection(){
 }
 
 heartbleed(){
+	#DMDEBUG - heartbleed hangs
+	return
 	bold " Heartbleed\c"; $ECHO " (CVE-2014-0160), experimental  \c"
 # see  http://heartbleed.com/
 	$OPENSSL s_client -tlsextdebug 2>&1 | grep -wq '^usage'
@@ -1054,9 +1072,11 @@ heartbleed(){
 		lines_returned=`echo -e "$SOCKREPLY" | xxd | wc -l`
 		if [ $lines_returned -gt 1 ]; then
 			red "VULNERABLE"
+			echo
 			ret=1
 		else
 			green "NOT vulnerable (ok)"
+			echo
 			ret=0
 		fi
 	fi
@@ -1093,17 +1113,21 @@ renego() {
 	if [ $reneg_ok -eq 0 ] && [ $secreg -eq 0 ]; then
 		# Client side renegotiation is accepted and secure renegotiation IS NOT supported 
 		red "is vulnerable (not ok)"
+		echo
 		return 1
 	fi
 	if [ $reneg_ok -eq 1 ] && [ $secreg -eq 1 ]; then
 		green "NOT vulnerable (ok)"
+		echo
 		return 0
 	fi
 	if [ $reneg_ok -eq 1 ] ; then   # 1,0
 		lgreen "got an error from the server while renegotiating on client: should be ok ($reneg_ok,$secreg)"
+		echo
 		return 0
 	fi
 	lgreen "Patched Server detected ($reneg_ok,$secreg), probably ok"	# 0,1
+	echo
 	return 0
 }
 
@@ -1136,9 +1160,11 @@ crime() {
 	STR=`$OPENSSL s_client $ADDCMD $STARTTLS -connect $NODEIP:$PORT $SNI 2>&1 </dev/null | grep Compression `
 	if echo $STR | grep -q NONE >/dev/null; then
 		green "NOT vulnerable (ok) "
+		echo
 		ret=0
 	else
 		red "is vulnerable (not ok)"
+		echo
 		ret=1
 	fi
 
@@ -1277,20 +1303,22 @@ starttls() {
 				runprotocols		; ret=`expr $? + $ret`
 				run_std_cipherlists	; ret=`expr $? + $ret`
 				simple_preference	; ret=`expr $? + $ret`
-				$ECHO
+				$ECHO ""
 				#cipher_per_proto   ; ret=`expr $? + $ret`
 				allciphers		; ret=`expr $? + $ret`
-
-				blue "--> Testing specific vulnerabilities\n"
+				echo
+				blue "\n--> Testing specific vulnerabilities"
+				echo
 #FIXME: heartbleed + CCS won't work this way yet
 #				heartbleed     ; ret=`expr $? + $ret`
 #				ccs_injection  ; ret=`expr $? + $ret`
 				renego		; ret=`expr $? + $ret`
-				crime		; ret=`expr $? + $ret`
+				crime		; ret=`expr $? + $ret`			
 				beast		; ret=`expr $? + $ret`
 				rc4			; ret=`expr $? + $ret`
 #FIXME: banner here!
 				pfs			; ret=`expr $? + $ret`
+				echo
 			fi
 			;;
 		*) echo "momentarily only ftp, smtp, pop3, imap, xmpp and telnet allowed" >&2
@@ -1389,9 +1417,9 @@ cleanup () {
 	else
 		rm $TMPFILE $HEADERFILE $LOGFILE 2>/dev/null
 	fi
-	$ECHO
+	$ECHO ""
 	datebanner "Done"
-	$ECHO
+	$ECHO ""
 }
 
 ignore_no_av() {
@@ -1475,16 +1503,16 @@ dns() {
 }
 
 display_dns() {
-	$ECHO
+	$ECHO "\n\n"
      [ -n "$rDNS" ] && $ECHO " rDNS ($NODEIP): $rDNS"
      if [ `echo "$IPADDRs" | wc -w` -gt 1 ]; then
-          $ECHO " further IP addresses:  \c"
+          $ECHO "\n further IP addresses:  \c"
           for i in $IPADDRs; do
                [ "$i" == "$NODEIP" ] && continue
                $ECHO " $i\c"
           done
 	fi
-     $ECHO
+     # $ECHO ""
 }
 
 datebanner() {
@@ -1498,7 +1526,7 @@ datebanner() {
 			display_dns
 		;;
 	esac
-     $ECHO
+    echo
 }
 
 
@@ -1583,7 +1611,7 @@ case "$1" in
 	-B|--heartbleet)
 		parse_hn_port "$2"
 		maketempf
-		blue "--> Testing for heartbleed vulnerability \n"
+		blue "\n--> Testing for heartbleed vulnerability \n"
 		heartbleed
 		ret=$?
 		cleanup
@@ -1591,7 +1619,7 @@ case "$1" in
 	-I|--ccs|--ccs_injection)
 		parse_hn_port "$2"
 		maketempf
-		blue "--> Testing for CCS injection vulnerability \n"
+		blue "\n--> Testing for CCS injection vulnerability \n"
 		ccs_injection
 		ret=$?
 		cleanup
@@ -1599,7 +1627,7 @@ case "$1" in
 	-R|--renegotiation)
 		parse_hn_port "$2"
 		maketempf
-		blue "--> Testing for Renegotiation vulnerability \n"
+		blue "\n--> Testing for Renegotiation vulnerability \n"
 		renego
 		ret=$?
 		cleanup
@@ -1607,7 +1635,7 @@ case "$1" in
 	-C|--compression|--crime)
 		parse_hn_port "$2"
 		maketempf
-		blue "--> Testing for CRIME vulnerability \n"
+		blue "\n--> Testing for CRIME vulnerability \n"
 		crime
 		ret=$?
 		cleanup
@@ -1615,7 +1643,7 @@ case "$1" in
 	-T|--breach)
 		parse_hn_port "$2"
 		maketempf
-		blue "--> Testing for BREACH (HTTP compression) vulnerability \n"
+		blue "\n--> Testing for BREACH (HTTP compression) vulnerability \n"
 		breach
 		ret=$?
 		ret=`expr $? + $ret`
@@ -1638,7 +1666,9 @@ case "$1" in
 	-H|--header|--headers)  
 		parse_hn_port "$2"
 		maketempf
-		blue "--> Testing HTTP Header response \n"
+		echo
+		blue "\n--> Testing HTTP Header response"
+		echo
 		hsts
 		ret=$?
 		serverbanner
@@ -1653,8 +1683,8 @@ case "$1" in
 		spdy 			; ret=`expr $? + $ret`
 		run_std_cipherlists	; ret=`expr $? + $ret`
 		simple_preference 	; ret=`expr $? + $ret`
-
-		blue "--> Testing specific vulnerabilities\n"
+		echo
+		blue "\n--> Testing specific vulnerabilities\n"
 		heartbleed          ; ret=`expr $? + $ret`
 		ccs_injection       ; ret=`expr $? + $ret`
 		renego			; ret=`expr $? + $ret`
@@ -1663,14 +1693,16 @@ case "$1" in
 		beast			; ret=`expr $? + $ret`
 
 		rc4				; ret=`expr $? + $ret`
-
-		blue "--> Testing HTTP Header response \n"
+		echo
+		blue "\n--> Testing HTTP Header response"
+		echo
 		hsts 			; ret=`expr $? + $ret`
 		serverbanner		; ret=`expr $? + $ret`
-
+		# echo
 		pfs				; ret=`expr $? + $ret`
 
 		cleanup 
+		echo
 		exit $ret ;;
 esac
 
